@@ -1,0 +1,19 @@
+# This file is used by pip to install required python packages
+# Usage: pip install -r requirements.txt
+
+# FastAPI Stuff
+fastapi
+uvicorn
+requests
+
+# Wake word, speech to text, text to speech
+pvporcupine
+pvcheetah
+pvorca
+
+# Audio lib
+pyaudio
+
+# Utility stuff
+num2words
+requests
