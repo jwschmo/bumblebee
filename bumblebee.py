@@ -18,6 +18,7 @@ bb_api = os.environ["BB_API"]
 porcupine = pvporcupine.create(access_key=pv_key, keywords=['bumblebee'])
 cheetah = pvcheetah.create(access_key=pv_key, endpoint_duration_sec=1)
 orca = pvorca.create(access_key=pv_key)
+print(orca.valid_characters)
 
 pa = pyaudio.PyAudio()
 input_stream = pa.open(rate=cheetah.sample_rate, channels=1, format=pyaudio.paInt16, input=True, frames_per_buffer=cheetah.frame_length)
@@ -29,13 +30,9 @@ def replace_numbers_in_string(s):
 def convert_numbers(text):
     text = replace_numbers_in_string(text)
     text = text.replace("/", " per ")
-    text = text.replace("`", " backtick ")
-    text = text.replace("\"", " quote ")
-    text = text.replace("\'", "")
-    text = text.replace("(", " open bracket ")
-    text = text.replace(")", " close bracket ")
     text = text.replace("&", " and ")
     text = text.replace("°", " degrees ")
+    text = ''.join(c for c in text if c in orca.valid_characters)
     return text
 
 # Call the LLM API service and get the completion out
@@ -47,6 +44,7 @@ def llm(text):
 
 # Send that audio out the speakers
 def tts(text):
+    text = text[:2000] # TTS will only do 2k characters
     pcm = orca.synthesize(text)
     pcm = struct.pack('%dh' % len(pcm), *pcm)
     outut_stream.write(pcm)

@@ -7,7 +7,7 @@ with open("model.json", 'r') as file:
     model = json.load(file)
 
 # Whip the llama into gear
-DEFAULT_SYSTEM = "You are Bumblebee, a friendly chatbot. You help the user answer questions, solve problems and make plans. You waste little words and provide the short answer,"
+DEFAULT_SYSTEM = "You are Bumblebee, a friendly chatbot. You help the user answer questions, solve problems and make plans. You waste little words and provide a very short answer"
 DEFAULT_TOKENS = -1
 DEFAULT_TEMP = 0.7
 
