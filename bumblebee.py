@@ -30,9 +30,12 @@ def convert_numbers(text):
     text = replace_numbers_in_string(text)
     text = text.replace("/", " per ")
     text = text.replace("`", " backtick ")
+    text = text.replace("\"", " quote ")
+    text = text.replace("\'", "")
     text = text.replace("(", " open bracket ")
     text = text.replace(")", " close bracket ")
     text = text.replace("&", " and ")
+    text = text.replace("°", " degrees ")
     return text
 
 # Call the LLM API service and get the completion out
