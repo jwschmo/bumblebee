@@ -8,6 +8,9 @@ import num2words
 import re
 import os
 
+from pwn import *
+import struct
+
 # Nice way to load environment variables for deployments
 from dotenv import load_dotenv
 load_dotenv()
@@ -46,7 +49,20 @@ def llm(text):
 def tts(text):
     text = text[:2000] # TTS will only do 2k characters
     pcm = orca.synthesize(text)
-    pcm = struct.pack('%dh' % len(pcm), *pcm)
+    print("step 1")
+    print(len(pcm))
+    print("step 2")
+    print(type(len(pcm)))
+    #print(type(*pcm))
+    print("step 3")
+    print('%dh' % len(pcm))
+    print("step 4")
+    print(type('%dh' % len(pcm)))
+    print("step 5")
+    #print(*pcm)
+    print("stop step")
+    #temp = (*pcm)
+    pcm = struct.pack('%dh' % len(pcm[0]), *pcm[0])
     outut_stream.write(pcm)
 
 listening = False
