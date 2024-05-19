@@ -17,3 +17,7 @@ pyaudio
 # Utility stuff
 num2words
 requests
+
+# Microservice Pipes
+asyncio
+webrtcvad
