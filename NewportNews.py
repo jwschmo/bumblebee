@@ -12,6 +12,7 @@ import asyncio
 import webrtcvad
 from dotenv import load_dotenv
 import base64
+import pyttsx3
 
 # Load environment variables
 load_dotenv()
@@ -24,7 +25,8 @@ pa_frames_per_buffer_vad = 320  # 20ms frame for VAD
 pa_frames_per_buffer_porcupine = 512  # Frame size for Porcupine
 
 # Initialize WebSocket client
-sio = socketio.AsyncClient()
+sio_ASR = socketio.AsyncClient()
+sio_TTS = socketio.AsyncClient()
 
 # Parameters for WebRTC VAD
 vad = webrtcvad.Vad()
@@ -35,6 +37,11 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
 
+engine = pyttsx3.init('sapi5')
+voices = engine.getProperty('voices')
+rate = engine.getProperty('rate')
+engine.setProperty('rate', rate-50)
+
 porcupine = pvporcupine.create(access_key=pv_key, keyword_paths=[pv_ww])
 cheetah = pvcheetah.create(access_key=pv_key, endpoint_duration_sec=1)
 orca = pvorca.create(access_key=pv_key)
@@ -42,19 +49,67 @@ orca = pvorca.create(access_key=pv_key)
 pa = pyaudio.PyAudio()
 input_stream_vad = pa.open(rate=pa_sample_rate, channels=1, format=pyaudio.paInt16, input=True, frames_per_buffer=pa_frames_per_buffer_vad)
 input_stream_porcupine = pa.open(rate=pa_sample_rate, channels=1, format=pyaudio.paInt16, input=True, frames_per_buffer=pa_frames_per_buffer_porcupine)
-output_stream = pa.open(rate=orca.sample_rate, channels=1, format=pyaudio.paInt16, output=True)
+#output_stream = pa.open(rate=24000, channels=1, format=pyaudio.paInt16, output=True)  # Assuming TTS output is 24000 Hz
 
-@sio.event
+listening = False
+audio_queue = []
+playing = False
+
+@sio_ASR.event
 async def connect():
-    print("Connected to server")
+    print("Connected to ASR server")
 
-@sio.event
+@sio_ASR.event
 async def disconnect():
-    print("Disconnected from server")
+    print("Disconnected from ASR server")
 
-@sio.on('transcription')
+@sio_ASR.on('transcription')
 async def on_transcription(data):
     print(f"Transcription: {data}")
+
+@sio_TTS.event
+async def connect():
+    #await sio_TTS.emit("audio_text", "Hello, this is a test message for the text-to-speech functionality.")
+    #await play_next_audio("test")
+    print("Connected to TTS server")
+
+@sio_TTS.event
+async def disconnect():
+    print("Disconnected from TTS server")
+
+@sio_ASR.on('tts_audio')
+async def on_tts_audio(data):
+    global listening, playing
+    try:
+        print("Received TTS audio event")
+        # Stop the input streams
+        input_stream_vad.stop_stream()
+        input_stream_porcupine.stop_stream()
+        listening = False
+        
+        # Decode the base64 encoded TTS audio data
+        tts_audio_data = base64.b64decode(data)
+        
+        # Log the length of the received audio data
+        print(f"Received TTS audio data length: {len(tts_audio_data)} bytes")
+
+        # Add audio data to the queue
+        audio_queue.append(tts_audio_data)
+        print("Audio data added to queue")
+        if not playing:
+            playing = True
+            play_next_audio()
+
+    except Exception as e:
+        print(f"Error playing TTS audio: {e}")
+
+#@sio_TTS.on('audio_text')
+#async def handle_text_data(data):
+#    await sio_TTS.emit("audio_text", data)
+#    print(f"TTS: {data}")
+
+async def play_next_audio(data):
+    await sio_TTS.emit("audio_text", data)
 
 def replace_numbers_in_string(s):
     return re.sub(r'\d+', lambda x: num2words.num2words(int(x.group())), s)
@@ -73,18 +128,13 @@ def llm(text):
     response_data = response.json()
     return response_data["completion"]
 
-def tts(text):
-    text = text[:2000]  # TTS will only do 2k characters
-    pcm = orca.synthesize(text)
-    pcm = struct.pack('%dh' % len(pcm), *pcm)
-    output_stream.write(pcm)
-
 async def main():
-    await sio.connect('http://localhost:5001')
+    global listening
+    await sio_ASR.connect('http://localhost:5001')
+    await sio_TTS.connect('http://localhost:5000')
 
-    listening = False
     transcript = ""
-
+    #await sio_TTS.emit("audio_text", "Hello, this is a test message for the text-to-speech functionality.")
     while True:
         try:
             pcm_vad = input_stream_vad.read(pa_frames_per_buffer_vad, exception_on_overflow=True)
@@ -111,7 +161,7 @@ async def main():
                     is_speech = vad.is_speech(pcm_bytes_vad, RATE)
                     if is_speech:
                         print("Speech detected, sending data to server")
-                        await sio.emit("audio_data", base64.b64encode(pcm_bytes_vad).decode('utf-8'))
+                        await sio_ASR.emit("audio_data", base64.b64encode(pcm_bytes_vad).decode('utf-8'))
                 except Exception as e:
                     print(f"Error during VAD processing: {e}")
                     continue
@@ -126,11 +176,20 @@ async def main():
                         print("Voice Input: " + transcript)
                         llm_response = llm(transcript)
                         print("LLM Output: " + llm_response)
-                        tts(convert_numbers(llm_response))
+                        # Send the response to TTS microservice here
+                        print("Sending to TTS Service")
+                        #await sio_TTS.emit("audio_text", "Sending TTS Service.")
+                        #await sio_TTS.emit("audio_text", llm_response)
+                        await play_next_audio(llm_response)
+                        await asyncio.sleep(0.1)
+                        print("Sent to TTS Service")
+                        #engine.setProperty('voice', voices[0].id)
+                        #engine.say(llm_response)
+                        #engine.runAndWait()
                         transcript = ""
                         listening = False
                 except Exception as e:
-                    print(f"Error during Cheetah processing: {e}")
+                    print(f"Error during TTS processing: {e}")
                     continue
             else:
                 try:
@@ -153,7 +212,7 @@ if __name__ == "__main__":
         input_stream_vad.close()
         input_stream_porcupine.stop_stream()
         input_stream_porcupine.close()
-        output_stream.stop_stream()
-        output_stream.close()
+        #output_stream.stop_stream()
+        #output_stream.close()
         pa.terminate()
-        asyncio.run(sio.disconnect())
+        asyncio.run(sio_ASR.disconnect())

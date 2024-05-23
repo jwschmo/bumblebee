@@ -21,3 +21,4 @@ requests
 # Microservice Pipes
 asyncio
 webrtcvad
+playsound
